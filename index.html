@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FolderViewer Web</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f5f9;
+      color: #202938;
+    }
+    header {
+      background: #172554;
+      color: white;
+      padding: 22px 16px;
+    }
+    header h1 { margin: 0 0 7px; font-size: 23px; }
+    header p { margin: 0; color: #cbd5e1; font-size: 14px; }
+    main { max-width: 900px; margin: auto; padding: 18px; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 17px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 9px #17255412;
+    }
+    .status { color: #64748b; font-size: 14px; }
+    .device {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    .device h3 { margin: 0 0 8px; }
+    input, button {
+      font: inherit;
+      border-radius: 8px;
+      padding: 11px;
+    }
+    input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      margin: 7px 0;
+    }
+    button {
+      border: 0;
+      background: #1d4ed8;
+      color: white;
+      cursor: pointer;
+      margin: 5px 5px 5px 0;
+    }
+    button.secondary { background: #475569; }
+    button:focus, input:focus { outline: 2px solid #93c5fd; }
+    .notice { font-size: 13px; color: #64748b; line-height: 1.6; }
+    footer { text-align: center; color: #64748b; padding: 18px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📱 FolderViewer Web</h1>
+    <p>Device Management Panel</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>ডিভাইস ম্যানেজমেন্ট</h2>
+      <p class="status" id="connection">এটি পরীক্ষামূলক ডিজাইন। Supabase এখনো যুক্ত হয়নি।</p>
+      <button onclick="showDemo()">নমুনা ডিভাইস দেখো</button>
+      <button class="secondary" onclick="clearDevices()">তালিকা পরিষ্কার</button>
+    </section>
+
+    <section class="card">
+      <h2>ডিভাইসের তালিকা</h2>
+      <div id="devices">
+        <p class="status">এখনো কোনো ডিভাইস লোড হয়নি।</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>নিজের দেওয়া নাম</h3>
+      <p class="notice">পরবর্তী সংস্করণে এখানে নাম পরিবর্তন Supabase-এ সংরক্ষণ করা হবে। এই নমুনায় নাম শুধু পেজে পরিবর্তন হয়।</p>
+      <input id="deviceId" type="number" min="1" placeholder="ডিভাইস ID, যেমন 4">
+      <input id="alias" maxlength="60" placeholder="নতুন নাম, যেমন itel A05s">
+      <button onclick="renameDemo()">নমুনার নাম পরিবর্তন</button>
+    </section>
+
+    <section class="card">
+      <h3>নিরাপত্তা</h3>
+      <p class="notice">এখন এটি শুধু UI ডেমো। বাস্তব ডিভাইসের তথ্য বা IP দেখায় না। Supabase যুক্ত করার আগে Admin Login ও সার্ভার-পক্ষের অনুমতি যাচাই তৈরি করা হবে।</p>
+    </section>
+  </main>
+
+  <footer>FolderViewer Web · Demo version</footer>
+
+  <script>
+    let devices = [];
+
+    function showDemo() {
+      devices = [
+        { id: 1, name: "My Folder Viewer", alias: "Test Phone", status: "নমুনা" },
+        { id: 2, name: "Folder Viewer", alias: "Spare Phone", status: "নমুনা" },
+        { id: 4, name: "My Folder Viewer", alias: "আমার ফোন", status: "নমুনা" }
+      ];
+      render();
+      document.getElementById("connection").textContent =
+        "নমুনার তথ্য দেখানো হচ্ছে; Supabase-এর সঙ্গে সংযুক্ত নয়।";
+    }
+
+    function render() {
+      const root = document.getElementById("devices");
+      root.replaceChildren();
+
+      if (!devices.length) {
+        const p = document.createElement("p");
+        p.className = "status";
+        p.textContent = "কোনো ডিভাইস নেই।";
+        root.appendChild(p);
+        return;
+      }
+
+      devices.forEach(d => {
+        const card = document.createElement("div");
+        card.className = "device";
+        const title = document.createElement("h3");
+        title.textContent = "Device #" + d.id + " · " + (d.alias || d.name);
+        const name = document.createElement("p");
+        name.textContent = "আসল নাম: " + d.name;
+        const status = document.createElement("p");
+        status.className = "status";
+        status.textContent = "অবস্থা: " + d.status + " · IP: এখনো সংযুক্ত নয়";
+        card.append(title, name, status);
+        root.appendChild(card);
+      });
+    }
+
+    function renameDemo() {
+      const id = Number(document.getElementById("deviceId").value);
+      const alias = document.getElementById("alias").value.trim();
+      if (!id || !alias) {
+        alert("ডিভাইস ID ও নতুন নাম লিখো।");
+        return;
+      }
+      const device = devices.find(d => d.id === id);
+      if (!device) {
+        alert("এই ID নমুনার তালিকায় নেই। আগে নমুনা ডিভাইস দেখো।");
+        return;
+      }
+      device.alias = alias;
+      render();
+    }
+
+    function clearDevices() {
+      devices = [];
+      render();
+      document.getElementById("connection").textContent =
+        "নমুনার তালিকা পরিষ্কার করা হয়েছে।";
+    }
+  </script>
+</body>
+</html>
