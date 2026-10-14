@@ -15,48 +15,73 @@
     header {
       background: #172554;
       color: white;
-      padding: 22px 18px;
+      padding: 20px 16px;
     }
-    header h2 { margin: 0 0 6px; }
-    main { max-width: 650px; margin: auto; padding: 18px; }
+    header h2 { margin: 0 0 7px; }
+    header p { margin: 0; opacity: .85; }
+    main { max-width: 850px; margin: auto; padding: 14px; }
     .card {
       background: white;
-      padding: 20px;
-      margin: 16px 0;
+      padding: 18px;
+      margin: 14px 0;
       border-radius: 14px;
       box-shadow: 0 3px 12px #0000000b;
     }
     input, button {
       width: 100%;
-      padding: 13px;
-      margin-top: 12px;
-      border-radius: 9px;
-      font-size: 16px;
+      padding: 12px;
+      margin-top: 9px;
+      border-radius: 8px;
+      font: inherit;
     }
-    input { border: 1px solid #cbd5e1; }
+    input { border: 1px solid #cbd5e1; min-width: 0; }
     button {
       border: 0;
       background: #1d4ed8;
       color: white;
+      cursor: pointer;
       font-weight: bold;
     }
-    button:disabled { opacity: .6; }
-    .secondary { background: #475569; }
+    button.secondary { background: #475569; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .row button { width: auto; }
+    .row input { flex: 1; }
+    .device {
+      border: 1px solid #dbe3ee;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+      overflow-wrap: anywhere;
+    }
+    .device h3 { margin: 0 0 10px; }
+    .muted { color: #64748b; font-size: 14px; line-height: 1.6; }
     #message { white-space: pre-wrap; line-height: 1.6; }
-    .note { color: #64748b; font-size: 14px; line-height: 1.6; }
+    .pill {
+      display: inline-block;
+      background: #e2e8f0;
+      border-radius: 20px;
+      padding: 4px 9px;
+      font-size: 13px;
+    }
     [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <header>
     <h2>📱 FolderViewer Web</h2>
-    <div>Secure Device Management</div>
+    <p>Secure Device Management</p>
   </header>
 
   <main>
     <section class="card" id="loginCard">
       <h3>Admin Login</h3>
-      <p class="note">তোমার Supabase Auth User-এর ইমেইল ও পাসওয়ার্ড ব্যবহার করো।</p>
+      <p class="muted">তোমার Supabase Admin অ্যাকাউন্ট দিয়ে লগইন করো।</p>
       <form id="loginForm">
         <input id="email" type="email" placeholder="Admin Email"
           autocomplete="username" required>
@@ -66,24 +91,31 @@
       </form>
     </section>
 
-    <section class="card" id="accountCard" hidden>
-      <h3>লগইন সফল</h3>
-      <p id="account"></p>
-      <p class="note">
-        Admin পরিচয় যাচাই হয়েছে। পরবর্তী ধাপে সার্ভার-পক্ষের
-        অনুমতি যুক্ত করে ডিভাইসের তালিকা দেখানো হবে।
+    <section class="card" id="dashboard" hidden>
+      <div class="row">
+        <div style="flex:1;min-width:180px">
+          <h3 style="margin:0 0 6px">ডিভাইসের তালিকা</h3>
+          <div id="account" class="muted"></div>
+        </div>
+        <button id="refreshButton">↻ Refresh</button>
+        <button id="logoutButton" class="secondary">লগআউট</button>
+      </div>
+      <p class="muted">
+        আসল ডিভাইসের নাম অপরিবর্তিত থাকবে। নিজের দেওয়া নাম আলাদাভাবে
+        সংরক্ষণ করা হবে।
       </p>
-      <button id="logoutButton" class="secondary">লগআউট</button>
+      <div id="devices"></div>
     </section>
 
     <section class="card">
-      <p id="message" role="status">Supabase সংযোগ প্রস্তুত হচ্ছে...</p>
+      <strong>অবস্থা</strong>
+      <p id="message" role="status">Supabase প্রস্তুত হচ্ছে...</p>
     </section>
 
     <section class="card">
-      <p class="note">
-        এই পেজে এখনো ডিভাইসের তালিকা বা IP দেখানো হয় না।
-        Secret Key এখানে রাখা হয়নি।
+      <p class="muted">
+        নিরাপত্তা: এই পেজে Supabase Secret Key রাখা হয়নি।
+        IP ও Online/Offline তথ্য এখনো সার্ভার থেকে সংগ্রহ করা হচ্ছে না।
       </p>
     </section>
   </main>
@@ -98,30 +130,172 @@
     const SUPABASE_KEY =
       "sb_publishable_OA3eukLqTY8BrL3lf5trwQ_apXWqXh-";
 
+    const ADMIN_FUNCTION =
+      SUPABASE_URL + "/functions/v1/admin-gateway";
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const $ = id => document.getElementById(id);
 
-    function showMessage(text) {
+    function message(text) {
       $("message").textContent = text;
     }
 
-    function showLoggedIn(email) {
-      $("loginCard").hidden = true;
-      $("accountCard").hidden = false;
-      $("account").textContent = "অ্যাকাউন্ট: " + email;
+    function setBusy(id, busy) {
+      $(id).disabled = busy;
     }
 
-    function showLoggedOut() {
+    function showDashboard(user) {
+      $("loginCard").hidden = true;
+      $("dashboard").hidden = false;
+      $("account").textContent = "অ্যাকাউন্ট: " + (user.email || "");
+    }
+
+    function showLogin() {
       $("loginCard").hidden = false;
-      $("accountCard").hidden = true;
+      $("dashboard").hidden = true;
+      $("devices").replaceChildren();
       $("password").value = "";
+    }
+
+    async function callAdmin(action, extra = {}) {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("সেশন শেষ হয়েছে। আবার লগইন করো।");
+
+      const response = await fetch(ADMIN_FUNCTION, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ action, ...extra })
+      });
+
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error("সার্ভার থেকে সঠিক JSON পাওয়া যায়নি।");
+      }
+
+      if (!response.ok || result.ok !== true) {
+        throw new Error(result.error || ("HTTP " + response.status));
+      }
+
+      return result;
+    }
+
+    function makeText(tag, text, className = "") {
+      const el = document.createElement(tag);
+      el.textContent = text;
+      if (className) el.className = className;
+      return el;
+    }
+
+    function renderDevices(devices) {
+      const root = $("devices");
+      root.replaceChildren();
+
+      if (!devices || devices.length === 0) {
+        root.append(makeText("p", "এখনো কোনো ডিভাইস নিবন্ধিত নেই।"));
+        return;
+      }
+
+      for (const device of devices) {
+        const card = document.createElement("article");
+        card.className = "device";
+
+        const heading = document.createElement("div");
+        heading.className = "row";
+        heading.append(makeText("h3", "ডিভাইস ID: " + device.id));
+        heading.append(makeText("span", "নিবন্ধিত", "pill"));
+        card.append(heading);
+
+        card.append(makeText(
+          "p", "আসল নাম: " + (device.device_name || "Unknown")
+        ));
+
+        card.append(makeText(
+          "p", "নিজের দেওয়া নাম: " + (device.alias || "নাম দেওয়া হয়নি")
+        ));
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 60;
+        input.value = device.alias || "";
+        input.placeholder = "যেমন: itel A05s";
+        input.setAttribute("aria-label", "ডিভাইসের নিজের দেওয়া নাম");
+
+        const save = document.createElement("button");
+        save.textContent = "নাম সংরক্ষণ";
+        save.type = "button";
+
+        save.addEventListener("click", async () => {
+          const alias = input.value.trim();
+
+          if (!alias || alias.length > 60) {
+            message("নাম ১ থেকে ৬০ অক্ষরের মধ্যে লিখো।");
+            return;
+          }
+
+          save.disabled = true;
+          message("ডিভাইসের নাম সংরক্ষণ হচ্ছে...");
+
+          try {
+            await callAdmin("rename_device", {
+              device_id: device.id,
+              alias
+            });
+            message("ID " + device.id + "-এর নাম সংরক্ষণ হয়েছে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("নাম সংরক্ষণ হয়নি: " + error.message);
+          } finally {
+            save.disabled = false;
+          }
+        });
+
+        const editRow = document.createElement("div");
+        editRow.className = "row";
+        editRow.append(input, save);
+        card.append(editRow);
+
+        card.append(makeText(
+          "p",
+          "IP: Unknown · Online status: এখনো উপলভ্য নয়",
+          "muted"
+        ));
+
+        root.append(card);
+      }
+    }
+
+    async function loadDevices(showLoading = true) {
+      setBusy("refreshButton", true);
+      if (showLoading) message("ডিভাইসের তালিকা আনা হচ্ছে...");
+
+      try {
+        const result = await callAdmin("list_devices");
+        renderDevices(result.devices || []);
+        message("তালিকা আপডেট হয়েছে। মোট ডিভাইস: " +
+          (result.devices || []).length);
+      } catch (error) {
+        message("তালিকা আনা যায়নি: " + error.message);
+      } finally {
+        setBusy("refreshButton", false);
+      }
     }
 
     $("loginForm").addEventListener("submit", async event => {
       event.preventDefault();
-      const button = $("loginButton");
-      button.disabled = true;
-      showMessage("লগইন যাচাই হচ্ছে...");
+      setBusy("loginButton", true);
+      message("লগইন যাচাই হচ্ছে...");
 
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -131,36 +305,52 @@
 
         if (error) throw error;
 
-        showLoggedIn(data.user.email);
-        showMessage("লগইন সফল।");
+        showDashboard(data.user);
+        await loadDevices();
       } catch (error) {
-        showLoggedOut();
-        showMessage("লগইন ব্যর্থ: " + error.message);
+        showLogin();
+        message("লগইন বা Admin যাচাই ব্যর্থ: " + error.message);
       } finally {
-        button.disabled = false;
+        setBusy("loginButton", false);
       }
     });
+
+    $("refreshButton").addEventListener("click", () => loadDevices());
 
     $("logoutButton").addEventListener("click", async () => {
+      setBusy("logoutButton", true);
       const { error } = await supabase.auth.signOut();
+      setBusy("logoutButton", false);
+
       if (error) {
-        showMessage("লগআউট ব্যর্থ: " + error.message);
+        message("লগআউট ব্যর্থ: " + error.message);
         return;
       }
-      showLoggedOut();
-      showMessage("লগআউট হয়েছে।");
+
+      showLogin();
+      message("লগআউট হয়েছে।");
     });
 
-    const { data, error } = await supabase.auth.getSession();
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
 
-    if (error) {
-      showMessage("সংযোগ সমস্যা: " + error.message);
-    } else if (data.session) {
-      showLoggedIn(data.session.user.email);
-      showMessage("আগের লগইন সেশন পাওয়া গেছে।");
-    } else {
-      showMessage("Supabase প্রস্তুত। Admin Login করো।");
+      if (data.session) {
+        const { data: userData, error: userError } =
+          await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
+        showDashboard(userData.user);
+        await loadDevices();
+      } else {
+        showLogin();
+        message("Supabase প্রস্তুত। Admin Login করো।");
+      }
+    } catch (error) {
+      showLogin();
+      message("প্রস্তুত হতে সমস্যা হয়েছে: " + error.message);
     }
   </script>
 </body>
-  </html>
+</html>
