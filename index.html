@@ -43,7 +43,6 @@
       font-weight: bold;
     }
     button.secondary { background: #475569; }
-    button.danger { background: #b91c1c; }
     button:disabled { opacity: .55; cursor: wait; }
     .row {
       display: flex;
@@ -278,6 +277,36 @@
           "muted"
         ));
         card.append(makeText("p", "সর্বশেষ যোগাযোগ: " + seen, "muted"));
+
+        const pingTest = device.latest_ping_test;
+        if (pingTest) {
+          let pingText = "সর্বশেষ Ping পরীক্ষা: ";
+          if (pingTest.status === "pending") pingText += "ফোনের উত্তরের অপেক্ষায়";
+          else if (pingTest.status === "completed") {
+            const result = pingTest.result || {};
+            pingText += result.online === true ? "ফোন সাড়া দিয়েছে — Online" :
+              (result.online === false ? "ফোন সাড়া দিয়েছে — Offline" : "ফোন সাড়া দিয়েছে");
+            if (pingTest.processed_at) pingText += " · " + new Date(pingTest.processed_at).toLocaleString();
+          } else if (pingTest.status === "failed" || pingTest.status === "rejected") pingText += "ব্যর্থ / প্রত্যাখ্যাত";
+          else pingText += String(pingTest.status || "অজানা");
+          card.append(makeText("p", pingText, "muted"));
+        }
+        const pingTestButton = document.createElement("button");
+        pingTestButton.type = "button";
+        pingTestButton.textContent = "🔎 Ping পরীক্ষা / ফোনের রেসপন্স";
+        pingTestButton.addEventListener("click", async () => {
+          pingTestButton.disabled = true;
+          message("ফোনে Ping পরীক্ষার অনুরোধ পাঠানো হচ্ছে...");
+          try {
+            const result = await callAdmin("request_ping_test", { device_id: device.id });
+            message("Ping পরীক্ষার অনুরোধ সার্ভারে রাখা হয়েছে (Request ID: " + result.request_id +
+              ")। ফোন অনলাইন থাকলে ব্যাকগ্রাউন্ড সার্ভিস পরবর্তী poll-এ উত্তর দেবে। Refresh করলে ফলাফল দেখা যাবে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("Ping পরীক্ষার অনুরোধ পাঠানো যায়নি: " + error.message);
+          } finally { pingTestButton.disabled = false; }
+        });
+        card.append(pingTestButton);
 
         const latestLocation = device.latest_location;
         if (latestLocation && typeof latestLocation.latitude === "number" &&
