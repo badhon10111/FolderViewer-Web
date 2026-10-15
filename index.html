@@ -43,6 +43,7 @@
       font-weight: bold;
     }
     button.secondary { background: #475569; }
+    button.danger { background: #b91c1c; }
     button:disabled { opacity: .55; cursor: wait; }
     .row {
       display: flex;
@@ -311,6 +312,45 @@
           }
         });
         card.append(locationButton);
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "danger";
+        deleteButton.textContent = "🗑️ ডিভাইস ও সব ডাটা মুছুন";
+        deleteButton.addEventListener("click", async () => {
+          const firstConfirm = window.confirm(
+            "সতর্কতা! ডিভাইস ID " + device.id +
+            " (" + (device.alias || device.device_name || "নামহীন") +
+            ")-এর সার্ভার ডাটা স্থায়ীভাবে মুছে ফেলতে চাও?\\n\\n" +
+            "এর মধ্যে লোকেশন/অনুরোধের ইতিহাস, নিজের দেওয়া নাম ও ডিভাইস রেকর্ড থাকবে।"
+          );
+          if (!firstConfirm) return;
+
+          const typed = window.prompt(
+            "নিশ্চিত করতে ঠিক এই লেখা লিখো: DELETE-" + device.id
+          );
+          if (typed !== "DELETE-" + device.id) {
+            message("ডিলিট বাতিল হয়েছে: নিশ্চিতকরণ মেলেনি।");
+            return;
+          }
+
+          deleteButton.disabled = true;
+          message("ডিভাইস ID " + device.id + "-এর ডাটা মুছে ফেলা হচ্ছে...");
+          try {
+            const result = await callAdmin("delete_device", {
+              device_id: device.id,
+              confirm_text: typed
+            });
+            message("ডিভাইস ID " + device.id +
+              " এবং সংশ্লিষ্ট সার্ভার ডাটা মুছে ফেলা হয়েছে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("ডিলিট সম্পন্ন হয়নি: " + error.message);
+          } finally {
+            deleteButton.disabled = false;
+          }
+        });
+        card.append(deleteButton);
 
         root.append(card);
       }
