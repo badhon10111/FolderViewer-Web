@@ -266,11 +266,17 @@
         editRow.append(input, save);
         card.append(editRow);
 
+        const ip = device.ip_address || "এখনো পাওয়া যায়নি";
+        const status = device.status || "Offline";
+        const seen = device.last_seen
+          ? new Date(device.last_seen).toLocaleString()
+          : "এখনো যোগাযোগ হয়নি";
         card.append(makeText(
           "p",
-          "IP: Unknown · Online status: এখনো উপলভ্য নয়",
+          "IP: " + ip + " · Status: " + status,
           "muted"
         ));
+        card.append(makeText("p", "সর্বশেষ যোগাযোগ: " + seen, "muted"));
 
         root.append(card);
       }
@@ -316,6 +322,11 @@
     });
 
     $("refreshButton").addEventListener("click", () => loadDevices());
+
+    // Refresh presence data while the dashboard is open.
+    setInterval(() => {
+      if (!$("dashboard").hidden) loadDevices(false);
+    }, 30000);
 
     $("logoutButton").addEventListener("click", async () => {
       setBusy("logoutButton", true);
