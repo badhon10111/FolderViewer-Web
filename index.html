@@ -266,51 +266,11 @@
         editRow.append(input, save);
         card.append(editRow);
 
-        const ip = device.ip_address || "এখনো পাওয়া যায়নি";
-        const status = device.status || "Offline";
-        const seen = device.last_seen
-          ? new Date(device.last_seen).toLocaleString()
-          : "এখনো যোগাযোগ হয়নি";
         card.append(makeText(
           "p",
-          "IP: " + ip + " · Status: " + status,
+          "IP: Unknown · Online status: এখনো উপলভ্য নয়",
           "muted"
         ));
-        card.append(makeText("p", "সর্বশেষ যোগাযোগ: " + seen, "muted"));
-
-        const latestLocation = device.latest_location;
-        if (latestLocation && typeof latestLocation.latitude === "number" &&
-            typeof latestLocation.longitude === "number") {
-          card.append(makeText("p",
-            "সর্বশেষ অনুমোদিত লোকেশন: " + latestLocation.latitude + ", " + latestLocation.longitude,
-            "muted"));
-          const mapLink = document.createElement("a");
-          mapLink.href = "https://www.google.com/maps?q=" +
-            encodeURIComponent(latestLocation.latitude + "," + latestLocation.longitude);
-          mapLink.target = "_blank";
-          mapLink.rel = "noopener noreferrer";
-          mapLink.textContent = "মানচিত্রে দেখুন";
-          card.append(mapLink);
-        } else if (device.latest_location_status) {
-          card.append(makeText("p", "লোকেশন অবস্থা: " + device.latest_location_status, "muted"));
-        }
-
-        const locationButton = document.createElement("button");
-        locationButton.type = "button";
-        locationButton.textContent = "📍 লোকেশন আনুন";
-        locationButton.addEventListener("click", async () => {
-          locationButton.disabled = true;
-          message("লোকেশন অনুরোধ পাঠানো হচ্ছে...");
-          try {
-            await callAdmin("request_location", { device_id: device.id });
-            message("অনুরোধ পাঠানো হয়েছে। এখন ফোনে Folder Viewer খুলে ‘সার্ভারের অনুরোধ দেখুন’ চাপুন এবং লোকেশন অনুমোদন করুন।");
-          } catch (error) {
-            message("লোকেশন অনুরোধ পাঠানো যায়নি: " + error.message);
-          } finally {
-            locationButton.disabled = false;
-          }
-        });
-        card.append(locationButton);
 
         root.append(card);
       }
@@ -356,11 +316,6 @@
     });
 
     $("refreshButton").addEventListener("click", () => loadDevices());
-
-    // Refresh presence data while the dashboard is open.
-    setInterval(() => {
-      if (!$("dashboard").hidden) loadDevices(false);
-    }, 30000);
 
     $("logoutButton").addEventListener("click", async () => {
       setBusy("logoutButton", true);
