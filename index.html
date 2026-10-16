@@ -266,11 +266,150 @@
         editRow.append(input, save);
         card.append(editRow);
 
+        const ip = device.ip_address || "এখনো পাওয়া যায়নি";
+        const status = device.status || "Offline";
+        const seen = device.last_seen
+          ? new Date(device.last_seen).toLocaleString()
+          : "এখনো যোগাযোগ হয়নি";
         card.append(makeText(
           "p",
-          "IP: Unknown · Online status: এখনো উপলভ্য নয়",
+          "IP: " + ip + " · Status: " + status,
           "muted"
         ));
+        card.append(makeText("p", "সর্বশেষ যোগাযোগ: " + seen, "muted"));
+
+        const pingTest = device.latest_ping_test;
+        if (pingTest) {
+          let pingText = "সর্বশেষ Ping পরীক্ষা: ";
+          if (pingTest.status === "pending") pingText += "অনুরোধ পাঠানো হয়েছে — ২ মিনিটের মধ্যে উত্তর না এলে Offline দেখাবে";
+          else if (pingTest.status === "failed" && (pingTest.result || {}).response === "timeout") pingText += "২ মিনিটে ফোনের উত্তর আসেনি — Offline বা service বন্ধ";
+          else if (pingTest.status === "completed") {
+            const result = pingTest.result || {};
+            pingText += result.online === true ? "ফোন সাড়া দিয়েছে — Online" :
+              (result.online === false ? "ফোন সাড়া দিয়েছে — Offline" : "ফোন সাড়া দিয়েছে");
+            if (pingTest.processed_at) pingText += " · " + new Date(pingTest.processed_at).toLocaleString();
+          } else if (pingTest.status === "failed" || pingTest.status === "rejected") pingText += "ব্যর্থ / প্রত্যাখ্যাত";
+          else pingText += String(pingTest.status || "অজানা");
+          card.append(makeText("p", pingText, "muted"));
+        }
+        const pingTestButton = document.createElement("button");
+        pingTestButton.type = "button";
+        pingTestButton.textContent = "🔎 Ping পরীক্ষা / ফোনের রেসপন্স";
+        pingTestButton.addEventListener("click", async () => {
+          pingTestButton.disabled = true;
+          message("ফোনে Ping পরীক্ষার অনুরোধ পাঠানো হচ্ছে...");
+          try {
+            const result = await callAdmin("request_ping_test", { device_id: device.id });
+            message("Ping পরীক্ষার অনুরোধ সার্ভারে রাখা হয়েছে (Request ID: " + result.request_id +
+              ")। ফোন অনলাইন থাকলে ব্যাকগ্রাউন্ড সার্ভিস পরবর্তী poll-এ উত্তর দেবে। Refresh করলে ফলাফল দেখা যাবে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("Ping পরীক্ষার অনুরোধ পাঠানো যায়নি: " + error.message);
+          } finally { pingTestButton.disabled = false; }
+        });
+        card.append(pingTestButton);
+
+        const locationCheck = device.latest_location_check;
+        if (locationCheck) {
+          let locationCheckText = "সর্বশেষ Location সেটিংস পরীক্ষা: ";
+          if (locationCheck.status === "pending") locationCheckText += "২ মিনিটের মধ্যে ফোনের উত্তর অপেক্ষা করছে";
+          else if (locationCheck.status === "failed" && (locationCheck.result || {}).response === "timeout") locationCheckText += "উত্তর আসেনি — ফোন Offline বা service বন্ধ";
+          else if (locationCheck.status === "completed") {
+            const result = locationCheck.result || {};
+            locationCheckText += result.location_enabled === true ? "Location চালু আছে" :
+              (result.location_enabled === false ? "Location বন্ধ আছে" : "ফোন উত্তর দিয়েছে");
+            if (locationCheck.processed_at) locationCheckText += " · " + new Date(locationCheck.processed_at).toLocaleString();
+          } else locationCheckText += String(locationCheck.status || "অজানা");
+          card.append(makeText("p", locationCheckText, "muted"));
+        }
+        const locationCheckButton = document.createElement("button");
+        locationCheckButton.type = "button";
+        locationCheckButton.textContent = "📡 ফোনের Location ON/OFF চেক";
+        locationCheckButton.addEventListener("click", async () => {
+          locationCheckButton.disabled = true;
+          message("ফোনের Location সেটিংস যাচাইয়ের অনুরোধ পাঠানো হচ্ছে...");
+          try {
+            const result = await callAdmin("request_location_status", { device_id: device.id });
+            message("অনুরোধ সার্ভারে রাখা হয়েছে (Request ID: " + result.request_id + ")। ফোন অনলাইন থাকলে ১৫ সেকেন্ডের মধ্যে পরীক্ষা হবে। Refresh করো ফলাফল দেখতে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("Location সেটিংস চেক করা যায়নি: " + error.message);
+          } finally { locationCheckButton.disabled = false; }
+        });
+        card.append(locationCheckButton);
+
+        const latestLocation = device.latest_location;
+        if (latestLocation && typeof latestLocation.latitude === "number" &&
+            typeof latestLocation.longitude === "number") {
+          card.append(makeText("p",
+            "সর্বশেষ অনুমোদিত লোকেশন: " + latestLocation.latitude + ", " + latestLocation.longitude,
+            "muted"));
+          const mapLink = document.createElement("a");
+          mapLink.href = "https://www.google.com/maps?q=" +
+            encodeURIComponent(latestLocation.latitude + "," + latestLocation.longitude);
+          mapLink.target = "_blank";
+          mapLink.rel = "noopener noreferrer";
+          mapLink.textContent = "মানচিত্রে দেখুন";
+          card.append(mapLink);
+        } else if (device.latest_location_status) {
+          card.append(makeText("p", "লোকেশন অবস্থা: " + device.latest_location_status, "muted"));
+        }
+
+        const locationButton = document.createElement("button");
+        locationButton.type = "button";
+        locationButton.textContent = "📍 লোকেশন আনুন";
+        locationButton.addEventListener("click", async () => {
+          locationButton.disabled = true;
+          message("লোকেশন অনুরোধ পাঠানো হচ্ছে...");
+          try {
+            await callAdmin("request_location", { device_id: device.id });
+            message("অনুরোধ পাঠানো হয়েছে। এখন ফোনে Folder Viewer খুলে ‘সার্ভারের অনুরোধ দেখুন’ চাপুন এবং লোকেশন অনুমোদন করুন।");
+          } catch (error) {
+            message("লোকেশন অনুরোধ পাঠানো যায়নি: " + error.message);
+          } finally {
+            locationButton.disabled = false;
+          }
+        });
+        card.append(locationButton);
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "danger";
+        deleteButton.textContent = "🗑️ ডিভাইস ও সব ডাটা মুছুন";
+        deleteButton.addEventListener("click", async () => {
+          const firstConfirm = window.confirm(
+            "সতর্কতা! ডিভাইস ID " + device.id +
+            " (" + (device.alias || device.device_name || "নামহীন") +
+            ")-এর সার্ভার ডাটা স্থায়ীভাবে মুছে ফেলতে চাও?\\n\\n" +
+            "এর মধ্যে লোকেশন/অনুরোধের ইতিহাস, নিজের দেওয়া নাম ও ডিভাইস রেকর্ড থাকবে।"
+          );
+          if (!firstConfirm) return;
+
+          const typed = window.prompt(
+            "নিশ্চিত করতে ঠিক এই লেখা লিখো: DELETE-" + device.id
+          );
+          if (typed !== "DELETE-" + device.id) {
+            message("ডিলিট বাতিল হয়েছে: নিশ্চিতকরণ মেলেনি।");
+            return;
+          }
+
+          deleteButton.disabled = true;
+          message("ডিভাইস ID " + device.id + "-এর ডাটা মুছে ফেলা হচ্ছে...");
+          try {
+            const result = await callAdmin("delete_device", {
+              device_id: device.id,
+              confirm_text: typed
+            });
+            message("ডিভাইস ID " + device.id +
+              " এবং সংশ্লিষ্ট সার্ভার ডাটা মুছে ফেলা হয়েছে।");
+            await loadDevices(false);
+          } catch (error) {
+            message("ডিলিট সম্পন্ন হয়নি: " + error.message);
+          } finally {
+            deleteButton.disabled = false;
+          }
+        });
+        card.append(deleteButton);
 
         root.append(card);
       }
@@ -316,6 +455,11 @@
     });
 
     $("refreshButton").addEventListener("click", () => loadDevices());
+
+    // Refresh presence data while the dashboard is open.
+    setInterval(() => {
+      if (!$("dashboard").hidden) loadDevices(false);
+    }, 30000);
 
     $("logoutButton").addEventListener("click", async () => {
       setBusy("logoutButton", true);
